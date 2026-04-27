@@ -76,61 +76,90 @@ export class WhatsAppClient {
       }
 
       this.socket.ev.on('connection.update', async (update: any) => {
-        const { connection, lastDisconnect, qr } = update;
+        try {
+          const { connection, lastDisconnect, qr } = update;
 
-        if (qr && !options.usePairingCode) {
-          await this.emitQR(qr);
-        }
-
-        if (connection === 'close') {
-          this.connectionStatus = 'disconnected';
-          const shouldReconnect =
-            (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-
-          if (shouldReconnect) {
-            await this.connect(options);
-          } else {
-            await this.persistStatus('disconnected');
+          if (qr && !options.usePairingCode) {
+            await this.emitQR(qr);
           }
-        } else if (connection === 'open') {
-          this.connectionStatus = 'connected';
-          await this.persistStatus('connected');
+
+          if (connection === 'close') {
+            this.connectionStatus = 'disconnected';
+            const shouldReconnect =
+              (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+
+            if (shouldReconnect) {
+              await this.connect(options);
+            } else {
+              await this.persistStatus('disconnected');
+            }
+          } else if (connection === 'open') {
+            this.connectionStatus = 'connected';
+            await this.persistStatus('connected');
+          }
+        } catch (error) {
+          await this.hooks?.onError?.({
+            tenantId: this.tenantId,
+            label: this.label,
+            error,
+            stage: 'connection.update',
+          });
         }
       });
 
-      this.socket.ev.on('creds.update', saveCreds);
+      this.socket.ev.on('creds.update', async () => {
+        try {
+          await saveCreds();
+        } catch (error) {
+          await this.hooks?.onError?.({
+            tenantId: this.tenantId,
+            label: this.label,
+            error,
+            stage: 'creds.update',
+          });
+        }
+      });
 
       this.socket.ev.on('messages.upsert', async (payload: any) => {
-        const msg = payload?.messages?.[0];
-        if (!msg?.message) {
-          return;
+        try {
+          const msg = payload?.messages?.[0];
+          if (!msg?.message) {
+            return;
+          }
+
+          const messageText = this.extractMessageText(msg.message);
+          const remoteJid = msg.key.remoteJid || '';
+          const wasSentByThisClient = this.isRecentOutgoingMessage(remoteJid, messageText);
+
+          if (!messageText) {
+            return;
+          }
+
+          if (msg.key.fromMe && wasSentByThisClient) {
+            return;
+          }
+
+          const event: IncomingMessageRecord = {
+            tenantId: this.tenantId,
+            label: this.label,
+            remoteJid,
+            text: messageText,
+            sender: msg.pushName || null,
+            timestamp: new Date().toISOString(),
+            fromMe: Boolean(msg.key.fromMe),
+            rawMessage: msg,
+          };
+
+          await this.storage.saveInboundMessage(event);
+          await this.hooks?.onMessage?.(event);
+        } catch (error) {
+          await this.hooks?.onError?.({
+            tenantId: this.tenantId,
+            label: this.label,
+            error,
+            stage: 'messages.upsert',
+          });
         }
-
-        const messageText = this.extractMessageText(msg.message);
-        const remoteJid = msg.key.remoteJid || '';
-        const wasSentByThisClient = this.isRecentOutgoingMessage(remoteJid, messageText);
-
-        if (!messageText) {
-          return;
-        }
-
-        if (msg.key.fromMe && wasSentByThisClient) {
-          return;
-        }
-
-        const event: IncomingMessageRecord = {
-          tenantId: this.tenantId,
-          label: this.label,
-          remoteJid,
-          text: messageText,
-          sender: msg.pushName || null,
-          timestamp: new Date().toISOString(),
-          fromMe: Boolean(msg.key.fromMe),
-          rawMessage: msg,
-        };
-
-        await this.storage.saveInboundMessage(event);
-        await this.hooks?.onMessage?.(event);
       });
     } catch (error) {
       this.connectionStatus = 'disconnected';

@@ -77,52 +77,84 @@ class WhatsAppClient {
                 await this.emitQR(code);
             }
             this.socket.ev.on('connection.update', async (update) => {
-                const { connection, lastDisconnect, qr } = update;
-                if (qr && !options.usePairingCode) {
-                    await this.emitQR(qr);
-                }
-                if (connection === 'close') {
-                    this.connectionStatus = 'disconnected';
-                    const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== baileys_1.DisconnectReason.loggedOut;
-                    if (shouldReconnect) {
-                        await this.connect(options);
+                try {
+                    const { connection, lastDisconnect, qr } = update;
+                    if (qr && !options.usePairingCode) {
+                        await this.emitQR(qr);
                     }
-                    else {
-                        await this.persistStatus('disconnected');
+                    if (connection === 'close') {
+                        this.connectionStatus = 'disconnected';
+                        const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== baileys_1.DisconnectReason.loggedOut;
+                        if (shouldReconnect) {
+                            await this.connect(options);
+                        }
+                        else {
+                            await this.persistStatus('disconnected');
+                        }
+                    }
+                    else if (connection === 'open') {
+                        this.connectionStatus = 'connected';
+                        await this.persistStatus('connected');
                     }
                 }
-                else if (connection === 'open') {
-                    this.connectionStatus = 'connected';
-                    await this.persistStatus('connected');
+                catch (error) {
+                    await this.hooks?.onError?.({
+                        tenantId: this.tenantId,
+                        label: this.label,
+                        error,
+                        stage: 'connection.update',
+                    });
                 }
             });
-            this.socket.ev.on('creds.update', saveCreds);
+            this.socket.ev.on('creds.update', async () => {
+                try {
+                    await saveCreds();
+                }
+                catch (error) {
+                    await this.hooks?.onError?.({
+                        tenantId: this.tenantId,
+                        label: this.label,
+                        error,
+                        stage: 'creds.update',
+                    });
+                }
+            });
             this.socket.ev.on('messages.upsert', async (payload) => {
-                const msg = payload?.messages?.[0];
-                if (!msg?.message) {
-                    return;
+                try {
+                    const msg = payload?.messages?.[0];
+                    if (!msg?.message) {
+                        return;
+                    }
+                    const messageText = this.extractMessageText(msg.message);
+                    const remoteJid = msg.key.remoteJid || '';
+                    const wasSentByThisClient = this.isRecentOutgoingMessage(remoteJid, messageText);
+                    if (!messageText) {
+                        return;
+                    }
+                    if (msg.key.fromMe && wasSentByThisClient) {
+                        return;
+                    }
+                    const event = {
+                        tenantId: this.tenantId,
+                        label: this.label,
+                        remoteJid,
+                        text: messageText,
+                        sender: msg.pushName || null,
+                        timestamp: new Date().toISOString(),
+                        fromMe: Boolean(msg.key.fromMe),
+                        rawMessage: msg,
+                    };
+                    await this.storage.saveInboundMessage(event);
+                    await this.hooks?.onMessage?.(event);
                 }
-                const messageText = this.extractMessageText(msg.message);
-                const remoteJid = msg.key.remoteJid || '';
-                const wasSentByThisClient = this.isRecentOutgoingMessage(remoteJid, messageText);
-                if (!messageText) {
-                    return;
+                catch (error) {
+                    await this.hooks?.onError?.({
+                        tenantId: this.tenantId,
+                        label: this.label,
+                        error,
+                        stage: 'messages.upsert',
+                    });
                 }
-                if (msg.key.fromMe && wasSentByThisClient) {
-                    return;
-                }
-                const event = {
-                    tenantId: this.tenantId,
-                    label: this.label,
-                    remoteJid,
-                    text: messageText,
-                    sender: msg.pushName || null,
-                    timestamp: new Date().toISOString(),
-                    fromMe: Boolean(msg.key.fromMe),
-                    rawMessage: msg,
-                };
-                await this.storage.saveInboundMessage(event);
-                await this.hooks?.onMessage?.(event);
             });
         }
         catch (error) {

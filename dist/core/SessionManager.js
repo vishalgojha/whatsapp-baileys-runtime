@@ -94,28 +94,50 @@ class SessionManager {
             return;
         }
         this.rehydrationStarted = true;
-        const sessions = await this.storage.loadPersistedSessions();
+        let sessions = [];
+        try {
+            sessions = await this.storage.loadPersistedSessions();
+        }
+        catch (error) {
+            await this.options.hooks?.onError?.({
+                tenantId: 'system',
+                label: 'rehydration',
+                error,
+                stage: 'rehydrate.loadPersistedSessions',
+            });
+            return;
+        }
         for (const session of sessions) {
             const fullKey = `${session.tenantId}:${session.label}`;
             const sessionPath = path_1.default.join(this.options.sessionRoot, `${session.tenantId}_${session.label}`);
             const hasAuthState = fs_1.default.existsSync(sessionPath);
-            if (!hasAuthState) {
-                await this.storage.saveSessionStatus({
-                    ...session,
-                    status: 'disconnected',
-                    lastSync: new Date().toISOString(),
+            try {
+                if (!hasAuthState) {
+                    await this.storage.saveSessionStatus({
+                        ...session,
+                        status: 'disconnected',
+                        lastSync: new Date().toISOString(),
+                    });
+                    continue;
+                }
+                if (this.clients.has(fullKey)) {
+                    continue;
+                }
+                await this.createSession(session.tenantId, {
+                    label: session.label,
+                    ownerName: session.ownerName || undefined,
+                    phoneNumber: session.phoneNumber || undefined,
+                    skipLimitCheck: true,
                 });
-                continue;
             }
-            if (this.clients.has(fullKey)) {
-                continue;
+            catch (error) {
+                await this.options.hooks?.onError?.({
+                    tenantId: session.tenantId,
+                    label: session.label,
+                    error,
+                    stage: 'rehydrate.session',
+                });
             }
-            await this.createSession(session.tenantId, {
-                label: session.label,
-                ownerName: session.ownerName || undefined,
-                phoneNumber: session.phoneNumber || undefined,
-                skipLimitCheck: true,
-            });
         }
     }
     getAllSessions() {
