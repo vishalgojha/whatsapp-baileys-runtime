@@ -89,10 +89,54 @@ Your host app should attach those with hooks.
 - `PostgresStorageAdapter`
 - `FilesystemSessionMetadataAdapter`
 
+## Supabase adapter
+
+The package now includes a `SupabaseStorageAdapter` for teams already using Supabase.
+
+```ts
+import {
+  SessionManager,
+  SupabaseStorageAdapter,
+} from '@vishalgojha/whatsapp-baileys-runtime';
+
+const storage = new SupabaseStorageAdapter({
+  supabaseUrl: process.env.SUPABASE_URL!,
+  supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  sessionsTable: 'whatsapp_sessions',
+  messagesTable: 'messages',
+});
+
+const sessionManager = new SessionManager({
+  storage,
+  sessionRoot: './sessions',
+});
+```
+
+### Expected session table columns
+
+- `tenant_id`
+- `label`
+- `owner_name`
+- `phone_number`
+- `status`
+- `last_sync`
+
+### Expected messages table columns
+
+- `tenant_id`
+- `label`
+- `remote_jid`
+- `text`
+- `sender`
+- `timestamp`
+- `from_me`
+- `raw_message`
+
 ## Current exports
 
 - `WhatsAppClient`
 - `SessionManager`
 - `MemoryStorageAdapter`
+- `SupabaseStorageAdapter`
 - `sanitizeForWhatsApp`
 - shared types
