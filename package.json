@@ -1,0 +1,44 @@
+{
+  "name": "@vishalgojha/whatsapp-baileys-runtime",
+  "version": "0.1.0",
+  "description": "Reusable Baileys-based WhatsApp runtime with session management, storage adapters, and event hooks.",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"const fs=require('fs'); if (fs.existsSync('dist')) fs.rmSync('dist', { recursive: true, force: true });\"",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vishalgojha/whatsapp-baileys-runtime.git"
+  },
+  "homepage": "https://github.com/vishalgojha/whatsapp-baileys-runtime#readme",
+  "bugs": {
+    "url": "https://github.com/vishalgojha/whatsapp-baileys-runtime/issues"
+  },
+  "keywords": [
+    "whatsapp",
+    "baileys",
+    "runtime",
+    "automation"
+  ],
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.18"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "typescript": "^5.9.3"
+  }
+}
