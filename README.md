@@ -1,6 +1,8 @@
 # whatsapp-baileys-runtime
 
-Reusable Baileys-based WhatsApp runtime extracted from production learnings in PropAI Pulse.
+Reusable Baileys-based WhatsApp runtime with QR auth, session rehydration, adapters, and app hooks.
+
+`whatsapp-baileys-runtime` is a reusable WhatsApp transport runtime built on Baileys. It handles QR authentication, multi-session lifecycle management, inbound and outbound messaging, group access, and session restoration, while leaving storage and product workflows to pluggable adapters and hooks.
 
 This package focuses on the transport/runtime layer only:
 
@@ -12,11 +14,18 @@ This package focuses on the transport/runtime layer only:
 - storage adapter hooks
 - app-specific event hooks
 
-It intentionally does not contain product logic such as CRM writes, AI agents, billing, channels, or Supabase-specific assumptions.
+It intentionally does not contain product logic such as CRM writes, AI agents, billing, channels, or product-specific workflows.
 
 ## What this package is for
 
 Use this when you want the same WhatsApp Web / Baileys engine across multiple products, while keeping business logic in each host app.
+
+In architectural terms, this package gives you:
+
+- a reusable WhatsApp transport layer
+- adapter-driven persistence
+- hook-based application orchestration
+- a clean separation between session infrastructure and product logic
 
 ## Install
 
@@ -39,6 +48,13 @@ You provide runtime hooks for product behavior:
 - when inbound messages arrive
 - when outbound messages are sent
 - when runtime errors occur
+
+This means your app can attach things like:
+
+- CRM persistence
+- AI agent execution
+- routing into app-specific workflows
+- analytics and observability
 
 ## Quick example
 
@@ -71,6 +87,15 @@ await sessionManager.createSession('tenant-1', {
 ```
 
 ## Recommended host-app architecture
+
+The cleanest way to use this package is:
+
+1. let `whatsapp-baileys-runtime` own the transport layer
+2. plug in a storage adapter for persistence
+3. attach your app behavior through runtime hooks
+4. keep product decisions outside the runtime
+
+That pattern is what lets the same engine power multiple products without copying WhatsApp infrastructure between repos.
 
 Keep these outside this package:
 
@@ -140,3 +165,7 @@ const sessionManager = new SessionManager({
 - `SupabaseStorageAdapter`
 - `sanitizeForWhatsApp`
 - shared types
+
+## One-line summary
+
+Reusable Baileys-based WhatsApp runtime with adapter-driven persistence and hook-based application orchestration.
