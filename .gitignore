@@ -1,5 +1,4 @@
 node_modules/
-dist/
 sessions/
 .DS_Store
 npm-debug.log*
